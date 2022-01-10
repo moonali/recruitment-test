@@ -1,10 +1,14 @@
+using InterviewTest.Model;
+using InterviewTest.Repository;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.SpaServices.AngularCli;
 using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Newtonsoft.Json;
 
 namespace InterviewTest
 {
@@ -13,7 +17,7 @@ namespace InterviewTest
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
-            PrepareDB();
+            //PrepareDB();
         }
 
         public IConfiguration Configuration { get; }
@@ -21,49 +25,65 @@ namespace InterviewTest
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddControllersWithViews();
+            //Enable Cors
+            services.AddCors(c =>
+            {
+                c.AddPolicy("AllowOrigin", options => options.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+            });
 
+            services.AddControllers().AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.WriteIndented = true;
+            });
+            services.AddEntityFrameworkSqlite().AddDbContext<DatabaseContext>();
+            services.AddTransient < IEmployeeRepository, EmployeeRepository > ();
             // In production, the React files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
             {
-                configuration.RootPath = "ClientApp/build";
+                configuration.RootPath = "AngularClient/build";
             });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseCors(options => options.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
             }
-
+            //using (var client = new DatabaseContext())
+            //{
+            //    client.Database.EnsureCreated();
+            //}
             app.UseStaticFiles();
             app.UseSpaStaticFiles();
-
             app.UseRouting();
-
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapControllerRoute(
-                    name: "default",
-                    pattern: "{controller}/{action=Index}/{id?}");
+                endpoints.MapControllers();
             });
+            //app.UseEndpoints(endpoints =>
+            //{
+            //    endpoints.MapControllerRoute(
+            //        name: "default",
+            //        pattern: "{controller=EmployeesCrud}/{action=Index}/{id?}");
+            //});
 
             app.UseSpa(spa =>
             {
-                spa.Options.SourcePath = "ClientApp";
+                spa.Options.SourcePath = "AngularClient";
 
                 if (env.IsDevelopment())
                 {
-                    spa.UseReactDevelopmentServer(npmScript: "start");
+                    spa.UseAngularCliServer(npmScript: "start");
                 }
             });
         }
 
         private void PrepareDB()
         {
-            var connectionStringBuilder = new SqliteConnectionStringBuilder() { DataSource = "./SqliteDB.db" };
+            var connectionStringBuilder = new SqliteConnectionStringBuilder() { DataSource = "SqliteDB.db" };
             using (var connection = new SqliteConnection(connectionStringBuilder.ConnectionString))
             {
                 connection.Open();
@@ -73,14 +93,14 @@ namespace InterviewTest
                 delTableCmd.ExecuteNonQuery();
 
                 var createTableCmd = connection.CreateCommand();
-                createTableCmd.CommandText = "CREATE TABLE Employees(Name VARCHAR(50), Value INT)";
+                createTableCmd.CommandText = "CREATE TABLE Employees(Id INTEGER PRIMARY KEY,Name VARCHAR(50), Value INT)";
                 createTableCmd.ExecuteNonQuery();
 
                 //Fill with data
                 using (var transaction = connection.BeginTransaction())
                 {
                     var insertCmd = connection.CreateCommand();
-                    insertCmd.CommandText = @"INSERT INTO Employees VALUES
+                    insertCmd.CommandText = @"INSERT INTO Employees(Name,Value) VALUES
                         ('Abul', 1357),
                         ('Adolfo', 1224),
                         ('Alexander', 2296),
